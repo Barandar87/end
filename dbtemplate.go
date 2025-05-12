@@ -14,7 +14,6 @@ type Comment struct {
 	Contents    string
 	PublishedOn string
 	URL         string
-	Allowed     bool
 }
 
 type CommentedNewsItem struct {
