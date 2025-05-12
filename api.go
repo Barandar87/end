@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +16,9 @@ import (
 )
 
 var Filter string
+
+// RequestIDContextKey stores the ID in request context
+type RequestIDContextKey struct{}
 
 type loggingResponseWriter struct {
 	http.ResponseWriter
@@ -109,18 +113,80 @@ func (CAPI *CAPI) endpoints() {
 
 // GetCommentedNews retrieves the desired news item and its comments from our storage collection
 func (GAPI *GAPI) GetCommentedNews(w http.ResponseWriter, r *http.Request) {
-	//calling the database Get method and writing it to news variable
-	commentedNews := postgres.CommentedNews()
-	//transforming the received data to json and sending it to client
-	json.NewEncoder(w).Encode(commentedNews)
+
+	lrw := NewLoggingResponseWriter(w)
+	//log details
+	//Extracting requestID query parameter
+	requestID, err := strconv.Atoi(r.URL.Query().Get("request_id"))
+	if err != nil || requestID < 1 {
+		requestID = rangeIn(int(100000), int(999999999))
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, RequestIDContextKey{}, requestID)
+		r = r.WithContext(ctx)
+		requestTimeStamp := time.Now()
+		clientIP := r.RemoteAddr
+		respCode := lrw.statusCode
+		reqID, ok := r.Context().Value(RequestIDContextKey{}).(string)
+		if !ok {
+			log.Println("Failed to retrieve Request ID from context.")
+		}
+		//we now create our destination file with the preestablished name
+		//we allow reading and writng
+		bReqId := []byte(reqID)
+		bReqTimeStamp, err := requestTimeStamp.MarshalBinary()
+		if err != nil {
+			log.Printf("Encountered an error: %v.", err)
+		}
+		bClientIP := []byte(clientIP)
+		bRespCode := []byte(strconv.Itoa(respCode))
+		string := "Here is the log:" + " " + string(bReqId) + " " + string(bReqTimeStamp) + " " + string(bClientIP) + " " + string(bRespCode) + "."
+		log.Println(string)
+		os.WriteFile("outputFile.txt", []byte(string), os.ModePerm)
+
+		//calling the database Get method and writing it to news variable
+		commentedNews := postgres.CommentedNews()
+		//transforming the received data to json and sending it to client
+		json.NewEncoder(lrw).Encode(commentedNews)
+	}
 }
 
 // GetNewsTtitles retrieves all the news titles from our storage collection
 func (NAPI *NAPI) GetNewsTitles(w http.ResponseWriter, r *http.Request) {
-	//calling the database Get method and writing it to news variable
-	titles, _ := NAPI.NewsDb.GetNewsTitles()
-	//transforming the received data to json and sending it to client
-	json.NewEncoder(w).Encode(titles)
+
+	lrw := NewLoggingResponseWriter(w)
+	//log details
+	//Extracting requestID query parameter
+	requestID, err := strconv.Atoi(r.URL.Query().Get("request_id"))
+	if err != nil || requestID < 1 {
+		requestID = rangeIn(int(100000), int(999999999))
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, RequestIDContextKey{}, requestID)
+		r = r.WithContext(ctx)
+		requestTimeStamp := time.Now()
+		clientIP := r.RemoteAddr
+		respCode := lrw.statusCode
+		reqID, ok := r.Context().Value(RequestIDContextKey{}).(string)
+		if !ok {
+			log.Println("Failed to retrieve Request ID from context.")
+		}
+		//we now create our destination file with the preestablished name
+		//we allow reading and writng
+		bReqId := []byte(reqID)
+		bReqTimeStamp, err := requestTimeStamp.MarshalBinary()
+		if err != nil {
+			log.Printf("Encountered an error: %v.", err)
+		}
+		bClientIP := []byte(clientIP)
+		bRespCode := []byte(strconv.Itoa(respCode))
+		string := "Here is the log:" + " " + string(bReqId) + " " + string(bReqTimeStamp) + " " + string(bClientIP) + " " + string(bRespCode) + "."
+		log.Println(string)
+		os.WriteFile("outputFile.txt", []byte(string), os.ModePerm)
+
+		//calling the database Get method and writing it to news variable
+		titles, _ := NAPI.NewsDb.GetNewsTitles()
+		//transforming the received data to json and sending it to client
+		json.NewEncoder(lrw).Encode(titles)
+	}
 }
 
 // GetNews retrieves all the news from our storage collection
@@ -144,13 +210,19 @@ func (NAPI *NAPI) GetNews(w http.ResponseWriter, r *http.Request) {
 	requestID, err := strconv.Atoi(r.URL.Query().Get("request_id"))
 	if err != nil || requestID < 1 {
 		requestID = rangeIn(int(100000), int(999999999))
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, RequestIDContextKey{}, requestID)
+		r = r.WithContext(ctx)
 		requestTimeStamp := time.Now()
 		clientIP := r.RemoteAddr
 		respCode := lrw.statusCode
-
+		reqID, ok := r.Context().Value(RequestIDContextKey{}).(string)
+		if !ok {
+			log.Println("Failed to retrieve Request ID from context.")
+		}
 		//we now create our destination file with the preestablished name
 		//we allow reading and writng
-		bReqId := []byte(strconv.Itoa(requestID))
+		bReqId := []byte(reqID)
 		bReqTimeStamp, err := requestTimeStamp.MarshalBinary()
 		if err != nil {
 			log.Printf("Encountered an error: %v.", err)
@@ -181,10 +253,40 @@ func (NAPI *NAPI) GetNewsItemsByParam(w http.ResponseWriter, r *http.Request) {
 	Filters = "%" + Filters + "%"
 	fmt.Println(Filters)
 
-	//calling the database Get method and writing it to news variable
-	filteredNews, _ := NAPI.NewsDb.GetNewsItemsByParam(Filters)
-	//transforming the received data to json and sending it to client
-	json.NewEncoder(w).Encode(filteredNews)
+	lrw := NewLoggingResponseWriter(w)
+	//log details
+	//Extracting requestID query parameter
+	requestID, err := strconv.Atoi(r.URL.Query().Get("request_id"))
+	if err != nil || requestID < 1 {
+		requestID = rangeIn(int(100000), int(999999999))
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, RequestIDContextKey{}, requestID)
+		r = r.WithContext(ctx)
+		requestTimeStamp := time.Now()
+		clientIP := r.RemoteAddr
+		respCode := lrw.statusCode
+		reqID, ok := r.Context().Value(RequestIDContextKey{}).(string)
+		if !ok {
+			log.Println("Failed to retrieve Request ID from context.")
+		}
+		//we now create our destination file with the preestablished name
+		//we allow reading and writng
+		bReqId := []byte(reqID)
+		bReqTimeStamp, err := requestTimeStamp.MarshalBinary()
+		if err != nil {
+			log.Printf("Encountered an error: %v.", err)
+		}
+		bClientIP := []byte(clientIP)
+		bRespCode := []byte(strconv.Itoa(respCode))
+		string := "Here is the log:" + " " + string(bReqId) + " " + string(bReqTimeStamp) + " " + string(bClientIP) + " " + string(bRespCode) + "."
+		log.Println(string)
+		os.WriteFile("outputFile.txt", []byte(string), os.ModePerm)
+
+		//calling the database Get method and writing it to news variable
+		filteredNews, _ := NAPI.NewsDb.GetNewsItemsByParam(Filters)
+		//transforming the received data to json and sending it to client
+		json.NewEncoder(lrw).Encode(filteredNews)
+	}
 }
 
 // GetCommentsToNewsItem retrieves the specified amount # of the latest news from our storage collection
@@ -196,10 +298,41 @@ func (CAPI *CAPI) GetComments(w http.ResponseWriter, r *http.Request) {
 	//e.g. "10" from "/news/10"
 	vars := mux.Vars(r)["n"]
 	n, _ := strconv.Atoi(vars)
-	//calling the database Get method and writing it to news variable
-	comments, _ := CAPI.CommentsDb.GetCommentsToNewsItem(n)
-	//transforming the received data to json and sending it to client
-	json.NewEncoder(w).Encode(comments)
+
+	lrw := NewLoggingResponseWriter(w)
+	//log details
+	//Extracting requestID query parameter
+	requestID, err := strconv.Atoi(r.URL.Query().Get("request_id"))
+	if err != nil || requestID < 1 {
+		requestID = rangeIn(int(100000), int(999999999))
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, RequestIDContextKey{}, requestID)
+		r = r.WithContext(ctx)
+		requestTimeStamp := time.Now()
+		clientIP := r.RemoteAddr
+		respCode := lrw.statusCode
+		reqID, ok := r.Context().Value(RequestIDContextKey{}).(string)
+		if !ok {
+			log.Println("Failed to retrieve Request ID from context.")
+		}
+		//we now create our destination file with the preestablished name
+		//we allow reading and writng
+		bReqId := []byte(reqID)
+		bReqTimeStamp, err := requestTimeStamp.MarshalBinary()
+		if err != nil {
+			log.Printf("Encountered an error: %v.", err)
+		}
+		bClientIP := []byte(clientIP)
+		bRespCode := []byte(strconv.Itoa(respCode))
+		string := "Here is the log:" + " " + string(bReqId) + " " + string(bReqTimeStamp) + " " + string(bClientIP) + " " + string(bRespCode) + "."
+		log.Println(string)
+		os.WriteFile("outputFile.txt", []byte(string), os.ModePerm)
+
+		//calling the database Get method and writing it to news variable
+		comments, _ := CAPI.CommentsDb.GetCommentsToNewsItem(n)
+		//transforming the received data to json and sending it to client
+		json.NewEncoder(lrw).Encode(comments)
+	}
 }
 
 func rangeIn(low, hi int) int {
