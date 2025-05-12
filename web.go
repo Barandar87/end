@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -8,9 +9,9 @@ import (
 	"project/pkg/api"
 	postgres "project/pkg/dtbs"
 	"project/pkg/rss"
-	"strings"
-	"sync"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
 type JSONconfig struct {
@@ -37,19 +38,9 @@ func main() {
 	Comment2 = postgres.Comment{ParentID: 13, Contents: "Курская, Белгородская,Брянская... мыколы, вам не надоело как горох об стену? Сначала свои территории освободите, потом за чужие беритесь.", PublishedOn: "2025-05-03", URL: "https://lenta.ru/comments/news/2025/05/03/vs-rossii-udarili-po-sobravshimsya-na-proryv-v-bryanskoy-oblasti-silam-vsu/", Allowed: true}
 	Comment3 = postgres.Comment{ParentID: 13, Contents: "Удивительно, но два документа по сдаче недр штатам засекретили не только он народу Украины, который облапошивают, но и от верховной Рады! Цирк с конями!", PublishedOn: "2025-05-03", URL: "https://lenta.ru/comments/news/2025/05/03/vs-rossii-udarili-po-sobravshimsya-na-proryv-v-bryanskoy-oblasti-silam-vsu/", Allowed: true}
 
-	wg := new(sync.WaitGroup)
-	wg.Add(3)
-	go func() {
-		Comment1 = Censor(wg, Comment1)
-	}()
-	go func() {
-		Comment2 = Censor(wg, Comment2)
-	}()
-	go func() {
-		Comment3 = Censor(wg, Comment3)
-	}()
+	r := mux.NewRouter()
+	r.HandleFunc("/api/comments", commentHandler).Methods("POST")
 
-	wg.Wait()
 	var commentsChecked []postgres.Comment
 	commentsChecked = append(commentsChecked, Comment1, Comment2, Comment3)
 
@@ -121,17 +112,30 @@ func parseWebUrl(url string, newsCh chan<- []postgres.NewsItem, errCh chan<- err
 	}
 }
 
-func Censor(wg *sync.WaitGroup, Comment postgres.Comment) postgres.Comment {
-	//decreasing wg counter
-	defer wg.Done()
-	//establishing the list of foul words to be filtered out
-	var foulwords []string
-	foulwords = append(foulwords, "йцукен", "qwerty", "zxvbnm")
-	for _, word := range foulwords {
-		if strings.Contains(Comment.Contents, word) {
-			Comment.Contents = strings.ReplaceAll(Comment.Contents, Comment.Contents, "blocked")
-			Comment.Allowed = !Comment.Allowed
-		}
+func commentHandler(w http.ResponseWriter, r *http.Request) {
+	//reading the request
+	var comment postgres.Comment
+	err := json.NewDecoder(r.Body).Decode(&comment)
+	if err != nil || comment.Contents == "" {
+		http.Error(w, "Invalid comment body", http.StatusBadRequest)
+		return
 	}
-	return Comment
+	//re-routing the request to censor
+	censorshipURL := "http://localhost/check"
+	censorshipPayload, _ := json.Marshal(map[string]string{"text": comment.Contents})
+	resp, err := http.Post(censorshipURL, "application/json", bytes.NewBuffer(censorshipPayload))
+	if err != nil {
+		log.Println("Error contacting censorship service:", err)
+		http.Error(w, "Failed to validate comment", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusBadRequest {
+		http.Error(w, "Comment rejected by censorship service", http.StatusBadRequest)
+		return
+	} else if resp.StatusCode != http.StatusOK {
+		http.Error(w, "Censorship service error", http.StatusInternalServerError)
+		return
+	}
 }
